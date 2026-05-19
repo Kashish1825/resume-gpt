@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+=============================================================
+  AI Interview Agent  —  Frontend (index.html)
+=============================================================
+  This single HTML file contains FOUR screens:
+
+  Screen 1  (#screen-upload)     Upload resume + enter name
+  Screen 2  (#screen-interview)  Live Q&A session
+  Screen 3  (#screen-report)     Final score & feedback
+  Screen 4  (#screen-history)    All past interviews from DB
+
+  Only ONE screen is visible at a time.
+  JavaScript in app.js controls which screen shows.
+=============================================================
+-->
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Interview Agent</title>
+
+  <!-- Fonts: Syne (bold display) + DM Sans (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="static/css/style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     GLOBAL HEADER  (visible on all screens except interview)
+═══════════════════════════════════════════════════════════════ -->
+<header class="site-header" id="site-header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span class="logo-text">InterviewAI</span>
+    </div>
+    <nav class="header-nav">
+      <button class="nav-btn active" onclick="showScreen('upload')" id="nav-upload">New Interview</button>
+      <button class="nav-btn"        onclick="loadHistory()"         id="nav-history">History</button>
+    </nav>
+  </div>
+</header>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 1: UPLOAD
+═══════════════════════════════════════════════════════════════ -->
+<main id="screen-upload" class="screen active">
+
+  <!-- Left: hero copy -->
+  <section class="upload-hero">
+    <div class="hero-tag">AI-Powered · Resume-Based</div>
+    <h1 class="hero-heading">
+      Your Personal<br/>
+      <em>Interview Coach</em>
+    </h1>
+    <p class="hero-body">
+      Upload your resume. Our AI reads every line, extracts your
+      skills, and runs a real interview—then scores and coaches you.
+    </p>
+
+    <!-- Feature list -->
+    <ul class="feature-list">
+      <li><span class="feat-dot green"></span> Personalized technical &amp; behavioral questions</li>
+      <li><span class="feat-dot green"></span> Live per-answer feedback &amp; scoring</li>
+      <li><span class="feat-dot green"></span> Final grade with strengths &amp; improvement tips</li>
+      <li><span class="feat-dot green"></span> All sessions saved to SQLite database</li>
+    </ul>
+  </section>
+
+  <!-- Right: upload form -->
+  <section class="upload-form-wrap">
+    <div class="upload-card">
+      <h2 class="card-heading">Start Interview</h2>
+
+      <!-- Name field -->
+      <div class="form-group">
+        <label class="form-label" for="candidate-name">Your Name</label>
+        <input
+          type="text"
+          id="candidate-name"
+          class="form-input"
+          placeholder="e.g. Rahul Sharma"
+          autocomplete="off"
+        />
+      </div>
+
+      <!-- File drop zone -->
+      <div class="form-group">
+        <label class="form-label">Resume File</label>
+        <div
+          id="drop-zone"
+          class="drop-zone"
+          onclick="document.getElementById('file-input').click()"
+          ondragover="onDragOver(event)"
+          ondragleave="onDragLeave(event)"
+          ondrop="onDrop(event)"
+        >
+          <div class="dz-icon">↑</div>
+          <p class="dz-primary">Drop resume here or click to browse</p>
+          <p class="dz-secondary">PDF · DOCX · TXT &nbsp;|&nbsp; Max 5 MB</p>
+          <input
+            type="file"
+            id="file-input"
+            accept=".pdf,.docx,.txt"
+            style="display:none"
+            onchange="onFileSelect(event)"
+          />
+        </div>
+
+        <!-- Shows selected file name -->
+        <div id="file-badge" class="file-badge hidden">
+          <span id="file-badge-name"></span>
+          <button class="file-badge-remove" onclick="clearFile()" title="Remove">✕</button>
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <div id="upload-error" class="alert alert-error hidden"></div>
+
+      <!-- Loading state -->
+      <div id="upload-loading" class="loading-row hidden">
+        <div class="spinner-sm"></div>
+        <span>Analyzing resume &amp; generating questions…</span>
+      </div>
+
+      <button id="start-btn" class="btn-primary btn-full" onclick="startInterview()" disabled>
+        Begin Interview
+        <span class="btn-arrow">→</span>
+      </button>
+    </div>
+  </section>
+
+</main>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 2: INTERVIEW
+═══════════════════════════════════════════════════════════════ -->
+<main id="screen-interview" class="screen hidden">
+
+  <!-- Topbar (replaces main header during interview) -->
+  <div class="interview-bar">
+    <div class="ibar-left">
+      <span class="logo-icon">◈</span>
+      <span class="ibar-name" id="ibar-name">Interviewing…</span>
+      <span class="live-dot"></span>
+      <span class="live-label">LIVE</span>
+    </div>
+    <div class="ibar-right">
+      <span id="ibar-counter" class="ibar-counter">1 / 8</span>
+      <div class="ibar-progress-track">
+        <div id="ibar-progress-fill" class="ibar-progress-fill" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skills chips row -->
+  <div class="skills-row" id="skills-row">
+    <span class="skills-label">Skills detected:</span>
+    <div id="skills-chips" class="skills-chips"></div>
+  </div>
+
+  <!-- Chat / conversation area -->
+  <div id="chat-scroll" class="chat-scroll">
+    <div id="chat-messages" class="chat-messages"></div>
+  </div>
+
+  <!-- Answer input bar -->
+  <div class="answer-bar" id="answer-bar">
+    <div class="abar-inner">
+      <div class="abar-top">
+        <span class="abar-label">Your answer</span>
+        <span id="abar-chars" class="abar-chars">0 / 600</span>
+      </div>
+      <textarea
+        id="answer-input"
+        class="answer-textarea"
+        placeholder="Type your answer here… (Ctrl+Enter to submit)"
+        maxlength="600"
+        oninput="onCharCount()"
+        onkeydown="onKeyDown(event)"
+      ></textarea>
+      <div class="abar-actions">
+        <button class="btn-ghost" onclick="showHint()">💡 Hint</button>
+        <button id="submit-btn" class="btn-primary" onclick="submitAnswer()">
+          Submit <span class="btn-arrow">→</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 3: REPORT
+═══════════════════════════════════════════════════════════════ -->
+<main id="screen-report" class="screen hidden">
+  <div class="report-container">
+
+    <!-- Score hero -->
+    <div class="report-hero">
+      <div id="rpt-emoji" class="rpt-emoji">🎉</div>
+      <h1 id="rpt-title" class="rpt-title">Interview Complete!</h1>
+      <p  id="rpt-name"  class="rpt-name"></p>
+
+      <!-- Animated score ring -->
+      <div class="score-ring-wrap">
+        <svg class="score-ring" viewBox="0 0 140 140">
+          <circle class="ring-track" cx="70" cy="70" r="60"/>
+          <circle
+            id="ring-arc"
+            class="ring-arc"
+            cx="70" cy="70" r="60"
+            stroke-dasharray="377"
+            stroke-dashoffset="377"
+          />
+        </svg>
+        <div class="ring-inner">
+          <span id="rpt-score"  class="ring-score">0</span>
+          <span class="ring-max">/100</span>
+          <span id="rpt-grade" class="ring-grade">–</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary + strengths + improvements -->
+    <div class="report-grid">
+      <div class="report-card full-width">
+        <h3 class="rcard-title">📝 Overall Assessment</h3>
+        <p id="rpt-summary" class="rcard-body"></p>
+      </div>
+
+      <div class="report-card">
+        <h3 class="rcard-title green">✅ Top Strengths</h3>
+        <ul id="rpt-strengths" class="rcard-list"></ul>
+      </div>
+
+      <div class="report-card">
+        <h3 class="rcard-title amber">📈 Areas to Improve</h3>
+        <ul id="rpt-improvements" class="rcard-list"></ul>
+      </div>
+    </div>
+
+    <!-- Per-question accordion -->
+    <div class="qa-section">
+      <h2 class="qa-section-title">Question-by-Question Review</h2>
+      <div id="qa-accordion"></div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="report-actions">
+      <button class="btn-primary"   onclick="showScreen('upload')">↩ New Interview</button>
+      <button class="btn-secondary" onclick="window.print()">🖨️ Print</button>
+      <button class="btn-secondary" onclick="loadHistory()">📋 View History</button>
+    </div>
+
+  </div>
+</main>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 4: HISTORY
+═══════════════════════════════════════════════════════════════ -->
+<main id="screen-history" class="screen hidden">
+  <div class="history-container">
+    <div class="history-header">
+      <h1 class="history-title">Interview History</h1>
+      <p class="history-sub">All sessions saved in SQLite database</p>
+    </div>
+
+    <div id="history-loading" class="loading-row">
+      <div class="spinner-sm"></div>
+      <span>Loading from database…</span>
+    </div>
+
+    <div id="history-empty" class="history-empty hidden">
+      <p>No interviews yet. Start one above!</p>
+    </div>
+
+    <div id="history-table-wrap" class="history-table-wrap hidden">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Candidate</th>
+            <th>Score</th>
+            <th>Grade</th>
+            <th>Summary</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="history-actions">
+      <button class="btn-primary" onclick="showScreen('upload')">+ New Interview</button>
+    </div>
+  </div>
+</main>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: Hint popup
+═══════════════════════════════════════════════════════════════ -->
+<div id="hint-modal" class="modal-backdrop hidden" onclick="closeHint()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span>💡 How to Answer This</span>
+      <button class="modal-close" onclick="closeHint()">✕</button>
+    </div>
+    <div id="hint-body" class="modal-body"></div>
+    <button class="btn-primary btn-full" onclick="closeHint()">Got it!</button>
+  </div>
+</div>
+
+
+<script src="static/js/app.js"></script>
+</body>
+</html>
